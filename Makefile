@@ -1,0 +1,65 @@
+COMPOSE := docker compose -f infra/docker-compose.yml
+RUN := uv run
+SPEEDUP ?= 1000
+START_DATE ?= 2015-09-04
+SEEDS ?= 42 43 44
+
+.PHONY: help install up down logs data eda simulate train test test-integration lint fmt typecheck check serve loadtest clean
+
+help:  ## list targets
+	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  %-18s %s\n", $$1, $$2}'
+
+install:  ## install python deps and git hooks
+	uv sync
+	$(RUN) pre-commit install
+
+up:  ## start Redpanda, Redis, Postgres, MLflow
+	$(COMPOSE) up -d --build --wait
+	@echo "MLflow: http://localhost:5001  Redpanda Console: http://localhost:8080"
+
+down:  ## stop the stack (keeps volumes)
+	$(COMPOSE) down
+
+logs:
+	$(COMPOSE) logs -f --tail=100
+
+data:  ## download RetailRocket events.csv and build parquet
+	$(RUN) python -m streamline.ingest.download
+	$(RUN) python -m streamline.ingest.events
+
+eda: data  ## dataset summary -> reports/eda.md
+	$(RUN) python -m streamline.ingest.eda
+
+simulate:  ## replay events into Redpanda (SPEEDUP=, START_DATE=)
+	$(RUN) python -m streamline.ingest.simulator --speedup $(SPEEDUP) --start-date $(START_DATE)
+
+train: data  ## baselines + two-tower, logged to MLflow -> reports/results.md
+	$(RUN) python -m streamline.training.train --seeds $(SEEDS)
+
+test:  ## unit tests
+	$(RUN) pytest
+
+test-integration:  ## tests that need `make up`
+	$(RUN) pytest -m integration
+
+lint:
+	$(RUN) ruff check src tests
+	$(RUN) ruff format --check src tests
+
+fmt:
+	$(RUN) ruff format src tests
+	$(RUN) ruff check --fix src tests
+
+typecheck:
+	$(RUN) mypy
+
+check: lint typecheck test  ## everything CI runs
+
+serve:  ## FastAPI recommendation service (Phase 4)
+	@echo "Not built yet: serving lands in Phase 4." && exit 1
+
+loadtest:  ## Locust load test (Phase 4)
+	@echo "Not built yet: load testing lands in Phase 4." && exit 1
+
+clean:
+	rm -rf .pytest_cache .mypy_cache .ruff_cache
