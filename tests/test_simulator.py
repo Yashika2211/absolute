@@ -116,7 +116,8 @@ def test_roundtrip_through_redpanda() -> None:
 
     from confluent_kafka.admin import AdminClient
 
-    AdminClient({"bootstrap.servers": settings.kafka_bootstrap}).delete_topics([topic])
+    admin = AdminClient({"bootstrap.servers": settings.kafka_bootstrap})
+    admin.delete_topics([topic])[topic].result()
     assert sorted(received, key=lambda e: e.ts_ms) == events
     for user in range(5):  # per-user order is preserved by keying
         ts = [e.ts_ms for e in received if e.user_id == user]
