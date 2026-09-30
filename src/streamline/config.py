@@ -23,7 +23,7 @@ class Settings:
     )
     kafka_bootstrap: str = field(default_factory=lambda: _env("KAFKA_BOOTSTRAP", "localhost:19092"))
     events_topic: str = field(default_factory=lambda: _env("EVENTS_TOPIC", "clickstream"))
-    redis_url: str = field(default_factory=lambda: _env("REDIS_URL", "redis://localhost:6379/0"))
+    redis_url: str = field(default_factory=lambda: _env("REDIS_URL", "redis://localhost:6380/0"))
     mlflow_tracking_uri: str = field(
         default_factory=lambda: _env("MLFLOW_TRACKING_URI", "http://localhost:5001")
     )
