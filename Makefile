@@ -3,8 +3,10 @@ RUN := uv run
 SPEEDUP ?= 1000
 START_DATE ?= 2015-09-04
 SEEDS ?= 42 43 44
+WORKERS ?= 1
+SKEW_HOURS ?= 168
 
-.PHONY: help install up down logs data eda simulate train test test-integration lint fmt typecheck check serve loadtest clean
+.PHONY: help install up down logs data eda simulate stream backfill skew-check train test test-integration lint fmt typecheck check serve loadtest clean
 
 help:  ## list targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  %-18s %s\n", $$1, $$2}'
@@ -32,6 +34,15 @@ eda: data  ## dataset summary -> reports/eda.md
 
 simulate:  ## replay events into Redpanda (SPEEDUP=, START_DATE=)
 	$(RUN) python -m streamline.ingest.simulator --speedup $(SPEEDUP) --start-date $(START_DATE)
+
+stream:  ## Bytewax job: clickstream topic -> Redis online store (WORKERS=)
+	$(RUN) python -m bytewax.run "streamline.features.stream:get_flow()" -w $(WORKERS)
+
+backfill: data  ## point-in-time features for every event -> data/offline (Parquet)
+	$(RUN) python -m streamline.features.backfill
+
+skew-check:  ## replay real events through Redpanda/Bytewax/Redis and diff vs offline
+	$(RUN) python -m streamline.features.skew_check --start-date $(START_DATE) --hours $(SKEW_HOURS)
 
 train: data  ## baselines + two-tower, logged to MLflow -> reports/results.md
 	$(RUN) python -m streamline.training.train --seeds $(SEEDS)
