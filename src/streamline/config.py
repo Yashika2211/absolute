@@ -44,6 +44,10 @@ class Settings:
     def events_parquet(self) -> Path:
         return self.processed_dir / "events.parquet"
 
+    @property
+    def offline_features_dir(self) -> Path:
+        return self.data_dir / "offline" / "event_features"
+
 
 def get_settings() -> Settings:
     return Settings()
