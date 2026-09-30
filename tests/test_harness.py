@@ -56,6 +56,16 @@ def test_score_partial() -> None:
     assert m["mrr@10"] == pytest.approx((0.5 + 0.0) / 2)
 
 
+def test_novel_metrics_ignore_seen_items() -> None:
+    history = make_events([(0, 1, 10, "view"), (1, 2, 11, "view")])
+    target = make_events([(5, 1, 10, "view"), (6, 1, 20, "view"), (7, 2, 11, "view")])
+    # user 1 re-views 10 (seen) and discovers 20; user 2 only repeats -> excluded from new_*
+    m = evaluate(Oracle({1: [10, 20], 2: [11]}), history, target, ks=[1])
+    assert m["recall@1"] == pytest.approx((0.5 + 1.0) / 2)
+    assert m["new_recall@1"] == pytest.approx(1.0)  # 10 removed, so 20 is ranked first
+    assert m["new_eval_users"] == 1
+
+
 def test_score_length_mismatch() -> None:
     with pytest.raises(ValueError):
         score([[1]], build_eval_set(HISTORY, TARGET), ks=[10])
