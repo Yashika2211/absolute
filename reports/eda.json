@@ -1,0 +1,21 @@
+{
+  "events": 2755641,
+  "events_by_type": {
+    "view": 2664218,
+    "addtocart": 68966,
+    "transaction": 22457
+  },
+  "users": 1407580,
+  "items": 235061,
+  "user_item_pairs": 2145179,
+  "sparsity": 0.9999935164947027,
+  "start_date": "2015-05-03",
+  "end_date": "2015-09-18",
+  "days": 138.0,
+  "events_per_user_median": 1.0,
+  "events_per_user_p99": 13.0,
+  "users_with_one_event_pct": 71.2,
+  "items_with_5plus_events": 90942,
+  "view_to_cart_rate": 0.0259,
+  "view_to_purchase_rate": 0.0084
+}
