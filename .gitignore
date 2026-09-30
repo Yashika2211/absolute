@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Data and artifacts (reproducible from scripts)
+data/
+mlruns/
+mlartifacts/
+artifacts/
+*.parquet
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Secrets
+.env
+kaggle.json
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
