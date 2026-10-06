@@ -1,0 +1,218 @@
+{
+  "r50": {
+    "target_rps": 50,
+    "users": 32,
+    "workers": 4,
+    "client": {
+      "requests": 2783,
+      "failures": 0,
+      "rps": 47.2,
+      "p50_ms": 14.0,
+      "p95_ms": 18.0,
+      "p99_ms": 31.0,
+      "max_ms": 59.46220999999241
+    },
+    "server": {
+      "sources": {
+        "popular": 270,
+        "ranked": 2554
+      },
+      "stages": {
+        "popular:redis_user": {
+          "p50_ms": 0.15,
+          "p99_ms": 0.97
+        },
+        "popular:total": {
+          "p50_ms": 0.15,
+          "p99_ms": 0.97
+        },
+        "ranked:features": {
+          "p50_ms": 2.96,
+          "p99_ms": 6.61
+        },
+        "ranked:rank": {
+          "p50_ms": 1.0,
+          "p99_ms": 2.62
+        },
+        "ranked:redis_items": {
+          "p50_ms": 2.48,
+          "p99_ms": 7.24
+        },
+        "ranked:redis_user": {
+          "p50_ms": 0.28,
+          "p99_ms": 1.85
+        },
+        "ranked:retrieval": {
+          "p50_ms": 5.66,
+          "p99_ms": 11.48
+        },
+        "ranked:total": {
+          "p50_ms": 12.58,
+          "p99_ms": 28.2
+        }
+      }
+    }
+  },
+  "r100": {
+    "target_rps": 100,
+    "users": 32,
+    "workers": 4,
+    "client": {
+      "requests": 5449,
+      "failures": 0,
+      "rps": 92.3,
+      "p50_ms": 14.0,
+      "p95_ms": 19.0,
+      "p99_ms": 26.0,
+      "max_ms": 315.83642799978406
+    },
+    "server": {
+      "sources": {
+        "popular": 570,
+        "ranked": 4934
+      },
+      "stages": {
+        "popular:redis_user": {
+          "p50_ms": 0.15,
+          "p99_ms": 2.17
+        },
+        "popular:total": {
+          "p50_ms": 0.16,
+          "p99_ms": 2.17
+        },
+        "ranked:features": {
+          "p50_ms": 2.97,
+          "p99_ms": 6.5
+        },
+        "ranked:rank": {
+          "p50_ms": 1.02,
+          "p99_ms": 3.0
+        },
+        "ranked:redis_items": {
+          "p50_ms": 2.5,
+          "p99_ms": 5.73
+        },
+        "ranked:redis_user": {
+          "p50_ms": 0.29,
+          "p99_ms": 2.85
+        },
+        "ranked:retrieval": {
+          "p50_ms": 5.62,
+          "p99_ms": 10.88
+        },
+        "ranked:total": {
+          "p50_ms": 12.81,
+          "p99_ms": 23.65
+        }
+      }
+    }
+  },
+  "r150": {
+    "target_rps": 150,
+    "users": 32,
+    "workers": 4,
+    "client": {
+      "requests": 7933,
+      "failures": 0,
+      "rps": 134.2,
+      "p50_ms": 14.0,
+      "p95_ms": 21.0,
+      "p99_ms": 29.0,
+      "max_ms": 222.76142500004426
+    },
+    "server": {
+      "sources": {
+        "popular": 820,
+        "ranked": 7218
+      },
+      "stages": {
+        "popular:redis_user": {
+          "p50_ms": 0.17,
+          "p99_ms": 2.49
+        },
+        "popular:total": {
+          "p50_ms": 0.17,
+          "p99_ms": 2.49
+        },
+        "ranked:features": {
+          "p50_ms": 3.01,
+          "p99_ms": 7.54
+        },
+        "ranked:rank": {
+          "p50_ms": 1.03,
+          "p99_ms": 3.65
+        },
+        "ranked:redis_items": {
+          "p50_ms": 2.53,
+          "p99_ms": 6.38
+        },
+        "ranked:redis_user": {
+          "p50_ms": 0.32,
+          "p99_ms": 3.6
+        },
+        "ranked:retrieval": {
+          "p50_ms": 5.62,
+          "p99_ms": 12.28
+        },
+        "ranked:total": {
+          "p50_ms": 13.08,
+          "p99_ms": 26.1
+        }
+      }
+    }
+  },
+  "r0": {
+    "target_rps": 0,
+    "users": 32,
+    "workers": 4,
+    "client": {
+      "requests": 22639,
+      "failures": 0,
+      "rps": 382.8,
+      "p50_ms": 80.0,
+      "p95_ms": 140.0,
+      "p99_ms": 170.0,
+      "max_ms": 441.0851270004059
+    },
+    "server": {
+      "sources": {
+        "popular": 2343,
+        "ranked": 20597
+      },
+      "stages": {
+        "popular:redis_user": {
+          "p50_ms": 2.23,
+          "p99_ms": 26.52
+        },
+        "popular:total": {
+          "p50_ms": 2.23,
+          "p99_ms": 26.52
+        },
+        "ranked:features": {
+          "p50_ms": 13.47,
+          "p99_ms": 46.05
+        },
+        "ranked:rank": {
+          "p50_ms": 3.34,
+          "p99_ms": 20.53
+        },
+        "ranked:redis_items": {
+          "p50_ms": 12.23,
+          "p99_ms": 37.54
+        },
+        "ranked:redis_user": {
+          "p50_ms": 4.84,
+          "p99_ms": 36.57
+        },
+        "ranked:retrieval": {
+          "p50_ms": 28.29,
+          "p99_ms": 64.87
+        },
+        "ranked:total": {
+          "p50_ms": 70.14,
+          "p99_ms": 154.07
+        }
+      }
+    }
+  }
+}
