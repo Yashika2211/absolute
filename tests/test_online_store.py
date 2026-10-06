@@ -59,3 +59,21 @@ def test_clear_only_touches_prefix(store: OnlineStore) -> None:
     assert store.clear() > 0
     assert store.r.get("other") == b"1"
     assert store.watermark() is None
+
+
+def test_history_is_capped_ordered_and_idempotent(store: OnlineStore) -> None:
+    from streamline.features.definitions import HISTORY_LEN
+
+    events = [ev(i * 1000, item=i) for i in range(HISTORY_LEN + 10)]
+    # same-millisecond tie where string order ("10" < "9") differs from numeric order
+    events += [ev(10**9, item=10), ev(10**9, item=9)]
+    store.write_events(events)
+    store.write_events(events)  # replay
+    [(ts, items, kinds)] = store.user_histories([1], as_of_ms=10**9 + 1)
+    assert len(items) == HISTORY_LEN
+    assert items[-2:] == [9, 10]
+    assert ts == sorted(ts)
+    assert kinds == ["view"] * HISTORY_LEN
+    # strictly before as_of: the tie at 10**9 is excluded when as_of == 10**9
+    [(_, items_before, _)] = store.user_histories([1], as_of_ms=10**9)
+    assert items_before[-1] == HISTORY_LEN + 9
