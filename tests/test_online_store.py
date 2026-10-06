@@ -77,3 +77,12 @@ def test_history_is_capped_ordered_and_idempotent(store: OnlineStore) -> None:
     # strictly before as_of: the tie at 10**9 is excluded when as_of == 10**9
     [(_, items_before, _)] = store.user_histories([1], as_of_ms=10**9)
     assert items_before[-1] == HISTORY_LEN + 9
+
+
+def test_item_features_subset(store: OnlineStore) -> None:
+    store.write_events([ev(0, item=10), ev(1, item=10, event="addtocart")])
+    full = store.item_features([10, 11], as_of_ms=100)
+    part = store.item_features([10, 11], as_of_ms=100, features=["item_carts_1h", "item_views_24h"])
+    assert part == [{k: f[k] for k in ("item_views_24h", "item_carts_1h")} for f in full]
+    assert part[0] == {"item_views_24h": 1, "item_carts_1h": 1}
+    assert store.item_features([10], as_of_ms=100, features=[]) == [{}]
