@@ -2378,12 +2378,14 @@ dev = [
     { name = "fakeredis", extra = ["lua"] },
     { name = "httpx2" },
     { name = "kaggle" },
-    { name = "locust" },
     { name = "mypy" },
     { name = "pre-commit" },
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "ruff" },
+]
+loadtest = [
+    { name = "locust" },
 ]
 
 [package.metadata]
@@ -2410,13 +2412,13 @@ dev = [
     { name = "fakeredis", extras = ["lua"], specifier = ">=2.38.0" },
     { name = "httpx2", specifier = ">=2.13.1" },
     { name = "kaggle", specifier = ">=1.6" },
-    { name = "locust", specifier = ">=2.46.7" },
     { name = "mypy", specifier = ">=1.11" },
     { name = "pre-commit", specifier = ">=3.7" },
     { name = "pytest", specifier = ">=8.0" },
     { name = "pytest-cov", specifier = ">=5.0" },
     { name = "ruff", specifier = ">=0.6" },
 ]
+loadtest = [{ name = "locust", specifier = ">=2.46.7" }]
 
 [[package]]
 name = "sympy"
