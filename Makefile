@@ -7,6 +7,11 @@ WORKERS ?= 1
 SKEW_HOURS ?= 168
 REQUESTS ?= 8000
 API_WORKERS ?= 1
+LOAD_USERS ?= 32
+LOAD_RPS ?= 50 100 150
+LOAD_SECONDS ?= 60
+comma := ,
+space := $(subst ,, )
 
 .PHONY: help install up down logs data eda simulate stream backfill skew-check train rank test test-integration lint fmt typecheck check serve loadtest clean
 
@@ -76,8 +81,17 @@ check: lint typecheck test  ## everything CI runs
 serve:  ## FastAPI recommendation service on :8000 (needs `make rank` artifacts + `make stream`)
 	$(RUN) uvicorn streamline.serving.app:app --host 0.0.0.0 --port 8000 --workers $(API_WORKERS) --log-level warning
 
-loadtest:  ## Locust load test (Phase 4)
-	@echo "Not built yet: load testing lands in Phase 4." && exit 1
+loadtest:  ## Locust: p99 at fixed rates (LOAD_RPS=) + a saturation run, vs a running `make serve`
+	@mkdir -p reports/loadtest
+	@for rps in $(LOAD_RPS) 0; do \
+		echo "== target $$rps req/s (0 = saturation, $(LOAD_USERS) users back-to-back)"; \
+		TARGET_RPS=$$rps LOCUST_USERS=$(LOAD_USERS) STAGES_OUT=reports/loadtest/r$${rps}_stages.json \
+			$(RUN) locust -f loadtest/locustfile.py --headless -u $(LOAD_USERS) -r 4 \
+			-t $(LOAD_SECONDS)s --host http://localhost:8000 --csv reports/loadtest/r$$rps \
+			--only-summary --loglevel WARNING || exit 1; \
+	done
+	$(RUN) python -m streamline.serving.loadtest_report $(foreach r,$(LOAD_RPS) 0,r$(r)) \
+		--meta '{$(subst $(space),$(comma),$(foreach r,$(LOAD_RPS) 0,"r$(r)":{"target_rps":$(r),"users":$(LOAD_USERS),"workers":$(API_WORKERS)}))}'
 
 clean:
 	rm -rf .pytest_cache .mypy_cache .ruff_cache
