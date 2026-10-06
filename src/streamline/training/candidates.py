@@ -25,6 +25,15 @@ class Retriever:
         self.item_ids, self.item_vecs = model.item_embeddings()  # ids are sorted ascending
         self.index = AnnIndex(self.item_ids, self.item_vecs, config)
 
+    @classmethod
+    def from_index(cls, model: TwoTowerRecommender, index: AnnIndex) -> Retriever:
+        """Wrap a prebuilt (e.g. loaded) index instead of building one."""
+        obj = cls.__new__(cls)
+        obj.model = model
+        obj.item_ids, obj.item_vecs = model.item_embeddings()
+        obj.index = index
+        return obj
+
     def user_vectors(
         self, hist_items: Sequence[Sequence[int]], hist_events: Sequence[Sequence[str]]
     ) -> np.ndarray:
