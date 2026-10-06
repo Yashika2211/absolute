@@ -4,4 +4,5 @@
 | Recently viewed + popularity | 0.3988 | 0.3796 | 0.3998 | 0.0158 | 0.0035 |
 | Two-tower, exact | 0.5191 | 0.3738 | 0.3773 | 0.3009 | 0.1197 |
 | Two-tower, FAISS HNSW | 0.5191 | 0.3738 | 0.3773 | 0.3009 | 0.1197 |
-| **Two-tower + recent → LightGBM** | 0.5677 | 0.4331 | 0.4369 | 0.3040 | 0.1229 |
+| Two-tower + recent → LightGBM, all 22 features | 0.5677 | 0.4331 | 0.4369 | 0.3040 | 0.1229 |
+| Two-tower + recent → LightGBM, 17 features (served) | 0.5676 | 0.4332 | 0.4378 | 0.3029 | 0.1232 |
