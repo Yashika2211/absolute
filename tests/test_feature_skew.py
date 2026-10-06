@@ -15,7 +15,7 @@ from streamline.features.definitions import (
     SESSION_GAP_MS,
     USER_FEATURES,
 )
-from streamline.features.offline import item_features, user_features
+from streamline.features.offline import item_features, user_features, user_histories
 from streamline.features.online import OnlineStore
 from streamline.features.stream import OnlineStoreSink, build_flow
 from streamline.ingest.simulator import iter_events
@@ -24,9 +24,19 @@ from streamline.ingest.simulator import iter_events
 def _offline(events: pl.DataFrame, users: list[int], items: list[int], as_of: int) -> tuple:
     u = user_features(events, pl.DataFrame({"user_id": users, "as_of_ms": [as_of] * len(users)}))
     i = item_features(events, pl.DataFrame({"item_id": items, "as_of_ms": [as_of] * len(items)}))
+    h = user_histories(events, pl.DataFrame({"user_id": users, "as_of_ms": [as_of] * len(users)}))
     return (
         [{k: row[k] for k in USER_FEATURES} for row in u.iter_rows(named=True)],
         [{k: row[k] for k in ITEM_FEATURES} for row in i.iter_rows(named=True)],
+        [(r["hist_ts"], r["hist_items"], r["hist_events"]) for r in h.iter_rows(named=True)],
+    )
+
+
+def _online(store: OnlineStore, users: list[int], items: list[int], as_of: int) -> tuple:
+    return (
+        store.user_features(users, as_of),
+        store.item_features(items, as_of),
+        store.user_histories(users, as_of),
     )
 
 
@@ -45,8 +55,7 @@ def test_online_matches_offline_while_streaming(seed: int) -> None:
         if rng.random() < 0.15:
             users = rng.choice(all_users, 5).tolist()
             items = rng.choice(all_items, 5).tolist()
-            online = store.user_features(users, t), store.item_features(items, t)
-            assert online == _offline(events, users, items, t), f"skew at t={t}"
+            assert _online(store, users, items, t) == _offline(events, users, items, t), t
             checked += 1
         store.write_events(iter_events(batch))
     assert checked > 50
@@ -82,5 +91,5 @@ def test_bytewax_dataflow_matches_offline() -> None:
         DAY_MS,
     ):
         as_of = end + offset
-        online = store.user_features(users, as_of), store.item_features(items, as_of)
+        online = _online(store, users, items, as_of)
         assert online == _offline(events, users, items, as_of), f"skew at end+{offset}"
