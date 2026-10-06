@@ -24,7 +24,6 @@ from typing import Any
 
 from streamline.features.definitions import (
     HISTORY_LEN,
-    ITEM_FEATURES,
     ITEM_RETENTION_MS,
     ITEM_WINDOWS,
     LAST_EVENT_CAP_MS,
@@ -72,27 +71,32 @@ return 1
 
 
 ITEM_COUNTS_LUA = """
--- KEYS: n_types keys per item (one sorted set per event type), item-major
--- ARGV: as_of, n_types, then (type_position, window_ms) pairs, one per feature
-local as_of = tonumber(ARGV[1])
-local n_types = tonumber(ARGV[2])
-local n_windows = (#ARGV - 2) / 2
+-- ARGV: prefix, as_of, n_types, type names..., n_windows, (type_position, window_ms)...,
+--       then item ids. Keys are built here so the client sends ids, not 3 key strings
+--       per item. (Not Redis Cluster safe: keys are undeclared. Single node by design.)
+local prefix, as_of, n_types = ARGV[1], tonumber(ARGV[2]), tonumber(ARGV[3])
+local types = {}
+for t = 1, n_types do types[t] = ARGV[3 + t] end
+local p = 4 + n_types
+local n_windows = tonumber(ARGV[p])
+local win_type, win_ms = {}, {}
+for w = 1, n_windows do
+  win_type[w] = types[tonumber(ARGV[p + 2 * w - 1])]
+  win_ms[w] = tonumber(ARGV[p + 2 * w])
+end
 local upper = '(' .. as_of
 local out = {}
-for i = 0, #KEYS / n_types - 1 do
-  for w = 0, n_windows - 1 do
-    local key = KEYS[i * n_types + tonumber(ARGV[3 + 2 * w])]
-    out[#out + 1] = redis.call('ZCOUNT', key, as_of - tonumber(ARGV[4 + 2 * w]), upper)
+for i = p + 2 * n_windows + 1, #ARGV do
+  local base = prefix .. ':i:' .. ARGV[i] .. ':'
+  for w = 1, n_windows do
+    out[#out + 1] = redis.call('ZCOUNT', base .. win_type[w], as_of - win_ms[w], upper)
   end
 end
 return out
 """
 
-# event types that have per-item sets, and each item window's position among them
+# event types that have per-item sets (window args refer to their 1-based position)
 _ITEM_TYPES: tuple[str, ...] = tuple(dict.fromkeys(w.event for w in ITEM_WINDOWS if w.event))
-_WINDOW_ARGS: list[int] = [
-    x for w in ITEM_WINDOWS for x in (_ITEM_TYPES.index(w.event or "") + 1, w.window_ms)
-]
 
 
 class OnlineStore:
@@ -193,16 +197,32 @@ class OnlineStore:
             out.append(user_history_at(ts, items, events, as_of_ms))
         return out
 
-    def item_features(self, items: Sequence[int], as_of_ms: int) -> list[dict[str, int]]:
-        """All item window counts in one server-side call (one round trip, no per-command
-        client overhead). Same ZCOUNT semantics as a per-window pipeline."""
-        if not items:
-            return []
-        keys = [self._item_key(item, event) for item in items for event in _ITEM_TYPES]
-        counts = self._item_counts(keys=keys, args=[as_of_ms, len(_ITEM_TYPES), *_WINDOW_ARGS])
-        n = len(ITEM_WINDOWS)
+    def item_features(
+        self, items: Sequence[int], as_of_ms: int, features: Sequence[str] | None = None
+    ) -> list[dict[str, int]]:
+        """Item window counts in one server-side call (one round trip, no per-command
+        client overhead). `features` limits the work to the windows a model uses."""
+        windows = [w for w in ITEM_WINDOWS if features is None or w.name in features]
+        if not items or not windows:
+            return [{} for _ in items]
+        window_args = [
+            x for w in windows for x in (_ITEM_TYPES.index(w.event or "") + 1, w.window_ms)
+        ]
+        counts = self._item_counts(
+            keys=[],
+            args=[
+                self.prefix,
+                as_of_ms,
+                len(_ITEM_TYPES),
+                *_ITEM_TYPES,
+                len(windows),
+                *window_args,
+                *items,
+            ],
+        )
+        names, n = [w.name for w in windows], len(windows)
         return [
-            dict(zip(ITEM_FEATURES, (int(c) for c in counts[i * n : (i + 1) * n]), strict=True))
+            dict(zip(names, (int(c) for c in counts[i * n : (i + 1) * n]), strict=True))
             for i in range(len(items))
         ]
 
