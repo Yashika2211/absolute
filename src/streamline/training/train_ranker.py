@@ -18,6 +18,7 @@ import argparse
 import json
 import re
 import time
+from pathlib import Path
 from typing import Any
 
 import mlflow
@@ -65,6 +66,15 @@ def fit_two_towers(split: TimeSplit, seed: int) -> tuple[TwoTowerRecommender, Tw
     a.save(a_path)
     b.save(b_path)
     return a, b
+
+
+def export_popular(split: TimeSplit, path: Path, n: int = 1000) -> list[int]:
+    """Cold-start fallback for serving: popularity over the 14 days before the test split."""
+    popular = Popularity(14)
+    popular.fit(split.train_val)
+    path.mkdir(parents=True, exist_ok=True)
+    (path / "popular.json").write_text(json.dumps(popular.ranking[:n]))
+    return popular.ranking[:n]
 
 
 def featurize(
@@ -261,6 +271,7 @@ def main() -> None:
         tt_b.save(serving / "two_tower")
         retr_b.index.save(serving / "ann")
         ranker.save(serving / "ranker")
+        export_popular(split, serving)
         mlflow.log_artifacts(str(serving), artifact_path="serving")
 
     report: dict[str, Any] = {
