@@ -11,6 +11,7 @@ import numpy as np
 import polars as pl
 
 from streamline.features.definitions import (
+    HISTORY_LEN,
     ITEM_WINDOWS,
     LAST_EVENT_CAP_MS,
     SESSION_GAP_MS,
@@ -131,4 +132,34 @@ def item_features(events: pl.DataFrame, queries: pl.DataFrame) -> pl.DataFrame:
     )
     return queries.with_columns(
         [pl.Series(name, values, dtype=pl.Int64) for name, values in cols.items()]
+    )
+
+
+def user_histories(events: pl.DataFrame, queries: pl.DataFrame) -> pl.DataFrame:
+    """`queries` has user_id and as_of_ms; adds hist_ts / hist_items / hist_events:
+    the user's last HISTORY_LEN events strictly before as_of, oldest first.
+
+    Ties at the same millisecond are ordered by (item_id, event) so the online
+    store (Redis orders equal scores by member) returns the identical sequence.
+    """
+    ev = events.select(
+        "user_id", "ts_ms", "item_id", pl.col("event").cast(pl.Utf8).alias("event")
+    ).sort(["user_id", "ts_ms", "item_id", "event"])
+    user = queries["user_id"].to_numpy()
+    as_of = queries["as_of_ms"].to_numpy()
+    keys = _keys(ev["user_id"].to_numpy(), ev["ts_ms"].to_numpy())
+    end = np.searchsorted(keys, _keys(user, as_of), "left")
+    first = np.searchsorted(keys, _keys(user, np.zeros_like(as_of)), "left")
+    start = np.maximum(first, end - HISTORY_LEN)
+    ts, items, kinds = ev["ts_ms"].to_numpy(), ev["item_id"].to_numpy(), ev["event"].to_list()
+    return queries.with_columns(
+        hist_ts=pl.Series(
+            [ts[a:b].tolist() for a, b in zip(start, end, strict=True)], dtype=pl.List(pl.Int64)
+        ),
+        hist_items=pl.Series(
+            [items[a:b].tolist() for a, b in zip(start, end, strict=True)], dtype=pl.List(pl.Int64)
+        ),
+        hist_events=pl.Series(
+            [kinds[a:b] for a, b in zip(start, end, strict=True)], dtype=pl.List(pl.Utf8)
+        ),
     )
