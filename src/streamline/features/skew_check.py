@@ -29,7 +29,7 @@ from streamline.features.definitions import (
     SESSION_GAP_MS,
     USER_FEATURES,
 )
-from streamline.features.offline import item_features, user_features
+from streamline.features.offline import item_features, user_features, user_histories
 from streamline.features.online import OnlineStore
 from streamline.features.stream import get_flow
 from streamline.ingest.events import load_events
@@ -58,9 +58,28 @@ def compare(
 ) -> tuple[int, int, list[dict[str, Any]]]:
     compared, mismatches = 0, 0
     examples: list[dict[str, Any]] = []
+
+    def online_history(users: list[int], t: int) -> list[dict[str, Any]]:
+        return [{"user_history": h} for h in store.user_histories(users, t)]
+
+    def offline_history(ev: pl.DataFrame, q: pl.DataFrame) -> list[dict[str, Any]]:
+        rows = user_histories(ev, q).iter_rows(named=True)
+        return [{"user_history": (r["hist_ts"], r["hist_items"], r["hist_events"])} for r in rows]
+
     for entity, names, online_fn, offline_fn in (
-        ("user_id", USER_FEATURES, store.user_features, user_features),
-        ("item_id", ITEM_FEATURES, store.item_features, item_features),
+        (
+            "user_id",
+            USER_FEATURES,
+            store.user_features,
+            lambda e, q: user_features(e, q).to_dicts(),
+        ),
+        (
+            "item_id",
+            ITEM_FEATURES,
+            store.item_features,
+            lambda e, q: item_features(e, q).to_dicts(),
+        ),
+        ("user_id", ("user_history",), online_history, offline_history),
     ):
         ids = events[entity].unique().sort().to_list()
         for s in range(0, len(ids), batch):
@@ -69,9 +88,7 @@ def compare(
             offline = offline_fn(
                 events, pl.DataFrame({entity: chunk, "as_of_ms": [as_of] * len(chunk)})
             )
-            for entity_id, on, off in zip(
-                chunk, online, offline.iter_rows(named=True), strict=True
-            ):
+            for entity_id, on, off in zip(chunk, online, offline, strict=True):
                 for name in names:
                     compared += 1
                     if on[name] != off[name]:
