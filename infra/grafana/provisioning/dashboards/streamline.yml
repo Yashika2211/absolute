@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: streamline
+    folder: Streamline
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards
