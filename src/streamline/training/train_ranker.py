@@ -27,12 +27,13 @@ import polars as pl
 
 from streamline.config import REPO_ROOT, get_settings
 from streamline.eval.harness import EvalSet, build_eval_set, novel_view, score
+from streamline.features.definitions import ITEM_FEATURES
 from streamline.ingest.events import load_events
 from streamline.training.ann import AnnConfig, AnnIndex, ann_recall
 from streamline.training.baselines import Popularity
 from streamline.training.candidates import ANN_K, Retriever
 from streamline.training.ranker import Ranker
-from streamline.training.ranker_features import add_labels, build_features
+from streamline.training.ranker_features import FEATURES, add_labels, build_features
 from streamline.training.requests import HORIZON_MS, RequestSet, sample_requests
 from streamline.training.split import TimeSplit, time_split
 from streamline.training.train import _git_sha, _setup_mlflow
@@ -66,6 +67,18 @@ def fit_two_towers(split: TimeSplit, seed: int) -> tuple[TwoTowerRecommender, Tw
     a.save(a_path)
     b.save(b_path)
     return a, b
+
+
+PRUNE_MIN_GAIN = 0.005  # drop per-candidate online reads contributing < 0.5% of gain
+MAX_VALID_NDCG_DROP = 0.002  # accept the pruned ranker only if validation NDCG@10 holds
+
+
+def pruned_features(importance: dict[str, float]) -> list[str]:
+    """Item window features cost one Redis op per candidate per request; keep only those
+    that earn their cost. Per-request features (user, retrieval, history) are kept."""
+    return [
+        f for f in FEATURES if f not in ITEM_FEATURES or importance.get(f, 0.0) >= PRUNE_MIN_GAIN
+    ]
 
 
 def export_popular(split: TimeSplit, path: Path, n: int = 1000) -> list[int]:
@@ -215,12 +228,21 @@ def main() -> None:
 
         # time-ordered split of the val-window requests for early stopping
         cut = int(len(train_reqs) * 0.8)
-        ranker = Ranker()
-        fit_stats = ranker.fit(
-            train_frame.filter(pl.col("request_id") < cut),
-            train_frame.filter(pl.col("request_id") >= cut),
+        fit_part = train_frame.filter(pl.col("request_id") < cut)
+        valid_part = train_frame.filter(pl.col("request_id") >= cut)
+        full_ranker = Ranker()
+        full_stats = full_ranker.fit(fit_part, valid_part)
+        importance = full_ranker.importance()
+        lean_features = pruned_features(importance)
+        lean_ranker = Ranker(features=lean_features)
+        lean_stats = lean_ranker.fit(fit_part, valid_part)
+        # selection uses validation only; test is reported for both, never used to choose
+        use_lean = full_stats["valid_ndcg@10"] - lean_stats["valid_ndcg@10"] < MAX_VALID_NDCG_DROP
+        ranker, fit_stats = (lean_ranker, lean_stats) if use_lean else (full_ranker, full_stats)
+        print(
+            f"full ranker: {full_stats}\nlean ranker ({len(lean_features)} features): "
+            f"{lean_stats}\nserving: {'lean' if use_lean else 'full'}"
         )
-        print(f"ranker: {fit_stats}")
 
         eval_set = request_eval_set(test_reqs)
         n = len(test_reqs)
@@ -243,8 +265,13 @@ def main() -> None:
             "Two-tower, FAISS HNSW": evaluate_lists(
                 retr_b.index.search(user_vecs, 100)[0].tolist(), eval_set
             ),
-            "**Two-tower + recent → LightGBM**": evaluate_lists(
-                ranker.rerank(test_frame, n, 100), eval_set
+            f"Two-tower + recent → LightGBM, all {len(FEATURES)} features": evaluate_lists(
+                full_ranker.rerank(test_frame, n, 100), eval_set
+            ),
+            f"Two-tower + recent → LightGBM, {len(lean_features)} features (served)"
+            if use_lean
+            else f"Two-tower + recent → LightGBM, {len(lean_features)} features": evaluate_lists(
+                lean_ranker.rerank(test_frame, n, 100), eval_set
             ),
         }
         candidate_recall = float(
@@ -257,7 +284,6 @@ def main() -> None:
         )
         quality = ann_quality(retr_b, test_reqs)
         latency = latency_profile(retr_b, ranker, test_reqs, test_frame)
-        importance = ranker.importance()
 
         for name, m in rows.items():
             slug = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
@@ -289,6 +315,15 @@ def main() -> None:
         "ann": quality,
         "latency_ms": latency,
         "ranker": fit_stats,
+        "ranker_selection": {
+            "full": full_stats,
+            "lean": lean_stats,
+            "lean_features": lean_features,
+            "dropped_features": [f for f in FEATURES if f not in lean_features],
+            "served": "lean" if use_lean else "full",
+            "rule": f"drop item window features with gain share < {PRUNE_MIN_GAIN}; serve the "
+            f"lean ranker if validation NDCG@10 drops by < {MAX_VALID_NDCG_DROP}",
+        },
         "feature_importance_gain": importance,
     }
     out = settings.reports_dir
