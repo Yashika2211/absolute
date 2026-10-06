@@ -103,10 +103,13 @@ class Ranker:
             "valid_requests": float(valid["request_id"].n_unique()),
         }
 
-    def predict(self, frame: pl.DataFrame) -> np.ndarray:
+    def predict(self, frame: pl.DataFrame, num_threads: int = 0) -> np.ndarray:
+        """num_threads=0 uses LightGBM's default (all cores); serving passes 1."""
         assert self.booster is not None, "fit or load first"
         scores = self.booster.predict(
-            _matrix(frame, self.features), num_iteration=self.booster.best_iteration
+            _matrix(frame, self.features),
+            num_iteration=self.booster.best_iteration,
+            num_threads=num_threads,
         )
         return np.asarray(scores, dtype=np.float64)
 
