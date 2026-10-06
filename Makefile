@@ -5,8 +5,9 @@ START_DATE ?= 2015-09-04
 SEEDS ?= 42 43 44
 WORKERS ?= 1
 SKEW_HOURS ?= 168
+REQUESTS ?= 8000
 
-.PHONY: help install up down logs data eda simulate stream backfill skew-check train test test-integration lint fmt typecheck check serve loadtest clean
+.PHONY: help install up down logs data eda simulate stream backfill skew-check train rank test test-integration lint fmt typecheck check serve loadtest clean
 
 help:  ## list targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  %-18s %s\n", $$1, $$2}'
@@ -45,8 +46,12 @@ backfill: data  ## point-in-time features for every event -> data/offline (Parqu
 skew-check:  ## replay real events through Redpanda/Bytewax/Redis and diff vs offline
 	$(RUN) python -m streamline.features.skew_check --start-date $(START_DATE) --hours $(SKEW_HOURS)
 
-train: data  ## baselines + two-tower, logged to MLflow -> reports/results.md
+train: data  ## retrieval (baselines + two-tower) then ranking; logged to MLflow -> reports/
 	$(RUN) python -m streamline.training.train --seeds $(SEEDS)
+	$(RUN) python -m streamline.training.train_ranker --requests $(REQUESTS)
+
+rank: data  ## FAISS + LightGBM ranker only (reuses cached two-tower models) -> reports/ranking.md
+	$(RUN) python -m streamline.training.train_ranker --requests $(REQUESTS)
 
 test:  ## unit tests
 	$(RUN) pytest
