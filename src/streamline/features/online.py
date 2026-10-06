@@ -3,6 +3,8 @@
 Layout (all scores are event-time millis):
   {p}:u:{user}          ZSET  member "ts:item:event"   the user's recent events
   {p}:us:{user}         HASH  last_ts, session_start   bookkeeping for trimming
+  {p}:uh:{user}         ZSET  member "ts:item:event"   the user's last HISTORY_LEN events
+                                (zero-padded so equal scores sort like the offline engine)
   {p}:i:{item}:{event}  ZSET  member "ts:user"         the item's recent events by type
   {p}:watermark         STR   max event ts ingested    the stream's "now"
 
@@ -21,6 +23,7 @@ from collections.abc import Iterable, Sequence
 from typing import Any
 
 from streamline.features.definitions import (
+    HISTORY_LEN,
     ITEM_FEATURES,
     ITEM_RETENTION_MS,
     ITEM_WINDOWS,
@@ -29,6 +32,7 @@ from streamline.features.definitions import (
     USER_FEATURES,
     USER_RETENTION_MS,
     user_features_at,
+    user_history_at,
 )
 from streamline.ingest.simulator import ClickEvent
 
@@ -58,6 +62,9 @@ redis.call('ZADD', KEYS[3], ts, ARGV[3])
 redis.call('ZREMRANGEBYSCORE', KEYS[3], '-inf', '(' .. (ts - item_ret))
 redis.call('PEXPIRE', KEYS[3], ttl)
 
+redis.call('ZADD', KEYS[5], ts, ARGV[8])
+redis.call('ZREMRANGEBYRANK', KEYS[5], 0, -(tonumber(ARGV[9]) + 1))
+
 local wm = tonumber(redis.call('GET', KEYS[4]))
 if wm == nil or ts > wm then redis.call('SET', KEYS[4], ts) end
 return 1
@@ -77,6 +84,9 @@ class OnlineStore:
     def _session_key(self, user: int) -> str:
         return f"{self.prefix}:us:{user}"
 
+    def _history_key(self, user: int) -> str:
+        return f"{self.prefix}:uh:{user}"
+
     def _item_key(self, item: int, event: str) -> str:
         return f"{self.prefix}:i:{item}:{event}"
 
@@ -95,6 +105,7 @@ class OnlineStore:
                     self._session_key(ev.user_id),
                     self._item_key(ev.item_id, ev.event),
                     self.watermark_key,
+                    self._history_key(ev.user_id),
                 ],
                 args=[
                     ev.ts_ms,
@@ -104,6 +115,8 @@ class OnlineStore:
                     USER_RETENTION_MS,
                     ITEM_RETENTION_MS,
                     TTL_MS,
+                    f"{ev.ts_ms:013d}:{ev.item_id:010d}:{ev.event}",
+                    HISTORY_LEN,
                 ],
                 client=pipe,
             )
@@ -133,6 +146,26 @@ class OnlineStore:
                 events.append(event)
             features = user_features_at(ts, items, events, as_of_ms)
             out.append({name: features[name] for name in USER_FEATURES})
+        return out
+
+    def user_histories(
+        self, users: Sequence[int], as_of_ms: int
+    ) -> list[tuple[list[int], list[int], list[str]]]:
+        """Last HISTORY_LEN events before as_of per user: (ts, items, events), oldest first."""
+        pipe = self.r.pipeline(transaction=False)
+        for user in users:
+            pipe.zrangebyscore(self._history_key(user), "-inf", f"({as_of_ms}")
+        out = []
+        for rows in pipe.execute():
+            ts, items, events = [], [], []
+            for member in rows:
+                t, item, event = (member.decode() if isinstance(member, bytes) else member).split(
+                    ":"
+                )
+                ts.append(int(t))
+                items.append(int(item))
+                events.append(event)
+            out.append(user_history_at(ts, items, events, as_of_ms))
         return out
 
     def item_features(self, items: Sequence[int], as_of_ms: int) -> list[dict[str, int]]:
