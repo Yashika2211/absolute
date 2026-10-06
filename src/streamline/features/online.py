@@ -71,11 +71,36 @@ return 1
 """
 
 
+ITEM_COUNTS_LUA = """
+-- KEYS: n_types keys per item (one sorted set per event type), item-major
+-- ARGV: as_of, n_types, then (type_position, window_ms) pairs, one per feature
+local as_of = tonumber(ARGV[1])
+local n_types = tonumber(ARGV[2])
+local n_windows = (#ARGV - 2) / 2
+local upper = '(' .. as_of
+local out = {}
+for i = 0, #KEYS / n_types - 1 do
+  for w = 0, n_windows - 1 do
+    local key = KEYS[i * n_types + tonumber(ARGV[3 + 2 * w])]
+    out[#out + 1] = redis.call('ZCOUNT', key, as_of - tonumber(ARGV[4 + 2 * w]), upper)
+  end
+end
+return out
+"""
+
+# event types that have per-item sets, and each item window's position among them
+_ITEM_TYPES: tuple[str, ...] = tuple(dict.fromkeys(w.event for w in ITEM_WINDOWS if w.event))
+_WINDOW_ARGS: list[int] = [
+    x for w in ITEM_WINDOWS for x in (_ITEM_TYPES.index(w.event or "") + 1, w.window_ms)
+]
+
+
 class OnlineStore:
     def __init__(self, client: Any, prefix: str = "sl") -> None:
         self.r = client
         self.prefix = prefix
         self._write = client.register_script(WRITE_EVENT_LUA)
+        self._item_counts = client.register_script(ITEM_COUNTS_LUA)
 
     # keys -----------------------------------------------------------------
     def _user_key(self, user: int) -> str:
@@ -169,12 +194,12 @@ class OnlineStore:
         return out
 
     def item_features(self, items: Sequence[int], as_of_ms: int) -> list[dict[str, int]]:
-        pipe = self.r.pipeline(transaction=False)
-        for item in items:
-            for w in ITEM_WINDOWS:
-                assert w.event is not None, "item windows are per event type"
-                pipe.zcount(self._item_key(item, w.event), as_of_ms - w.window_ms, f"({as_of_ms}")
-        counts = pipe.execute()
+        """All item window counts in one server-side call (one round trip, no per-command
+        client overhead). Same ZCOUNT semantics as a per-window pipeline."""
+        if not items:
+            return []
+        keys = [self._item_key(item, event) for item in items for event in _ITEM_TYPES]
+        counts = self._item_counts(keys=keys, args=[as_of_ms, len(_ITEM_TYPES), *_WINDOW_ARGS])
         n = len(ITEM_WINDOWS)
         return [
             dict(zip(ITEM_FEATURES, (int(c) for c in counts[i * n : (i + 1) * n]), strict=True))
