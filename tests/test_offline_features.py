@@ -88,3 +88,22 @@ def test_empty_history() -> None:
     got = user_features(events, pl.DataFrame({"user_id": [1], "as_of_ms": [10]}))
     assert got["session_events"].to_list() == [0]
     assert got["user_events_1h"].to_list() == [0]
+
+
+@pytest.mark.parametrize("seed", [0, 1])
+def test_user_histories_match_reference(seed: int) -> None:
+    from streamline.features.definitions import user_history_at
+    from streamline.features.offline import user_histories
+
+    events = random_events(seed, n=3000)
+    got = user_histories(events, _queries(events, "user_id", seed))
+    ordered = events.with_columns(pl.col("event").cast(pl.Utf8)).sort(
+        ["user_id", "ts_ms", "item_id", "event"]
+    )
+    by_user = {u: g for (u,), g in ordered.group_by("user_id", maintain_order=True)}
+    for row in got.iter_rows(named=True):
+        g = by_user[row["user_id"]]
+        expected = user_history_at(
+            g["ts_ms"].to_list(), g["item_id"].to_list(), g["event"].to_list(), row["as_of_ms"]
+        )
+        assert (row["hist_ts"], row["hist_items"], row["hist_events"]) == expected
