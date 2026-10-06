@@ -6,14 +6,14 @@ SEEDS ?= 42 43 44
 WORKERS ?= 1
 SKEW_HOURS ?= 168
 REQUESTS ?= 8000
-API_WORKERS ?= 1
+API_WORKERS ?= 4
 LOAD_USERS ?= 32
 LOAD_RPS ?= 50 100 150
 LOAD_SECONDS ?= 60
 comma := ,
 space := $(subst ,, )
 
-.PHONY: help install up down logs data eda simulate stream backfill skew-check train rank test test-integration lint fmt typecheck check serve loadtest clean
+.PHONY: help install up down logs data eda simulate stream backfill skew-check train rank test test-integration lint fmt typecheck check serve serve-up loadtest clean
 
 help:  ## list targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  %-18s %s\n", $$1, $$2}'
@@ -81,14 +81,19 @@ check: lint typecheck test  ## everything CI runs
 serve:  ## FastAPI recommendation service on :8000 (needs `make rank` artifacts + `make stream`)
 	$(RUN) uvicorn streamline.serving.app:app --host 0.0.0.0 --port 8000 --workers $(API_WORKERS) --log-level warning
 
-loadtest:  ## Locust: p99 at fixed rates (LOAD_RPS=) + a saturation run, vs a running `make serve`
+serve-up:  ## containerised API (4 workers) + Prometheus :9090 + Grafana :3000
+	$(COMPOSE) --profile serving up -d --build --wait api prometheus grafana
+	@echo "API: http://localhost:8000/health  Grafana: http://localhost:3000  Prometheus: http://localhost:9090"
+
+loadtest:  ## Locust in Docker vs the `serve-up` API: p99 at LOAD_RPS rates + saturation -> reports/loadtest.md
 	@mkdir -p reports/loadtest
 	@for rps in $(LOAD_RPS) 0; do \
 		echo "== target $$rps req/s (0 = saturation, $(LOAD_USERS) users back-to-back)"; \
-		TARGET_RPS=$$rps LOCUST_USERS=$(LOAD_USERS) STAGES_OUT=reports/loadtest/r$${rps}_stages.json \
-			$(RUN) locust -f loadtest/locustfile.py --headless -u $(LOAD_USERS) -r 4 \
-			-t $(LOAD_SECONDS)s --host http://localhost:8000 --csv reports/loadtest/r$$rps \
-			--only-summary --loglevel WARNING || exit 1; \
+		$(COMPOSE) --profile loadtest run --rm \
+			-e TARGET_RPS=$$rps -e LOCUST_USERS=$(LOAD_USERS) \
+			-e STAGES_OUT=/app/reports/loadtest/r$${rps}_stages.json \
+			locust --headless -u $(LOAD_USERS) -r 4 -t $(LOAD_SECONDS)s --host http://api:8000 \
+			--csv /app/reports/loadtest/r$$rps --only-summary --loglevel WARNING || exit 1; \
 	done
 	$(RUN) python -m streamline.serving.loadtest_report $(foreach r,$(LOAD_RPS) 0,r$(r)) \
 		--meta '{$(subst $(space),$(comma),$(foreach r,$(LOAD_RPS) 0,"r$(r)":{"target_rps":$(r),"users":$(LOAD_USERS),"workers":$(API_WORKERS)}))}'
