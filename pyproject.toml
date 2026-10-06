@@ -30,8 +30,10 @@ dev = [
     "pre-commit>=3.7",
     "kaggle>=1.6",
     "fakeredis[lua]>=2.38.0",
-    "locust>=2.46.7",
     "httpx2>=2.13.1",
+]
+loadtest = [
+    "locust>=2.46.7",
 ]
 
 [build-system]
@@ -40,6 +42,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/streamline"]
+
+[tool.uv]
+default-groups = ["dev", "loadtest"]
 
 # CPU-only torch wheels on Linux (CI) to keep installs small.
 [tool.uv.sources]
