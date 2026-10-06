@@ -5,9 +5,9 @@
   "users": 77005,
   "items": 49447,
   "as_of_points": 6,
-  "values_compared": 5476332,
+  "values_compared": 5938362,
   "mismatches": 0,
-  "stream_seconds": 3.01,
-  "stream_events_per_sec": 43718,
+  "stream_seconds": 5.95,
+  "stream_events_per_sec": 22121,
   "examples": []
 }
