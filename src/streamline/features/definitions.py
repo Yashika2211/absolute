@@ -28,6 +28,7 @@ DAY_MS = 24 * HOUR_MS
 
 SESSION_GAP_MS = 30 * MINUTE_MS
 LAST_EVENT_CAP_MS = DAY_MS  # "no event in the last day" is reported as the cap
+HISTORY_LEN = 50  # user history = the last HISTORY_LEN events before as_of (any age)
 
 Entity = Literal["user", "item"]
 
@@ -69,6 +70,19 @@ ITEM_FEATURES: tuple[str, ...] = tuple(w.name for w in ITEM_WINDOWS)
 # How long the online store must retain events for an entity (event time).
 USER_RETENTION_MS = max(w.window_ms for w in USER_WINDOWS)
 ITEM_RETENTION_MS = max(w.window_ms for w in ITEM_WINDOWS)
+
+
+def user_history_at(
+    ts: Sequence[int], items: Sequence[int], events: Sequence[str], as_of_ms: int
+) -> tuple[list[int], list[int], list[str]]:
+    """The user's last HISTORY_LEN events strictly before as_of (oldest first).
+
+    This is the input of the two-tower user tower and of the ranker's user-item
+    features, so serving and offline evaluation see the same history.
+    """
+    end = bisect.bisect_left(ts, as_of_ms)
+    start = max(0, end - HISTORY_LEN)
+    return list(ts[start:end]), list(items[start:end]), list(events[start:end])
 
 
 def user_features_at(
