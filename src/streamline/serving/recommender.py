@@ -14,6 +14,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import faiss
 import polars as pl
 import torch
 
@@ -67,7 +68,10 @@ class ServingRecommender:
 
     @classmethod
     def from_artifacts(cls, path: Path, store: OnlineStore) -> ServingRecommender:
-        torch.set_num_threads(1)  # per-request work is tiny; avoid thread-pool contention
+        # Per-request work is tiny; one thread per worker avoids OpenMP pools from
+        # torch, FAISS and LightGBM oversubscribing the cores across workers.
+        torch.set_num_threads(1)
+        faiss.omp_set_num_threads(1)
         model = TwoTowerRecommender.load(path / "two_tower")
         retriever = Retriever.from_index(model, AnnIndex.load(path / "ann"))
         popular = json.loads((path / "popular.json").read_text())
@@ -128,7 +132,7 @@ class ServingRecommender:
             timer.lap("redis_user")
             rec = Recommendation(user_id, as_of_ms, self.popular[:k], [], "popular", 0)
         else:
-            scores = self.ranker.predict(frame)
+            scores = self.ranker.predict(frame, num_threads=1)
             ranked = (
                 frame.select("item_id")
                 .with_columns(score=pl.Series(scores))
