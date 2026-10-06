@@ -13,9 +13,11 @@ softmax with logQ correction for item popularity and accidental-hit masking.
 from __future__ import annotations
 
 import copy
+import json
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass
+from pathlib import Path
 
 import numpy as np
 import polars as pl
@@ -256,3 +258,60 @@ class TwoTowerRecommender:
             top = torch.topk(vecs @ item_vecs.T, k_eff, dim=1).indices.cpu().numpy() + 2
             out.extend(self.vocab.decode(row).tolist() for row in top)
         return out
+
+    # serving / request-time API ---------------------------------------------
+    @torch.no_grad()
+    def item_embeddings(self) -> tuple[np.ndarray, np.ndarray]:
+        """Raw item ids and their L2-normalised item-tower vectors (float32)."""
+        assert self.net is not None and self.vocab is not None
+        self.net.eval()
+        device = torch.device(self.config.device)
+        vecs = self.net.item_vectors(torch.arange(2, len(self.vocab), device=device))
+        return self.vocab.ids.copy(), vecs.cpu().numpy().astype(np.float32)
+
+    def encode_histories(
+        self, items: Sequence[Sequence[int]], events: Sequence[Sequence[str]]
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Raw per-user histories (oldest first) -> right-aligned padded index arrays."""
+        assert self.vocab is not None
+        length = self.config.max_history
+        h_items = np.zeros((len(items), length), dtype=np.int64)
+        h_types = np.zeros((len(items), length), dtype=np.int64)
+        for row, (its, evs) in enumerate(zip(items, events, strict=True)):
+            its, evs = list(its)[-length:], list(evs)[-length:]
+            if its:
+                h_items[row, length - len(its) :] = self.vocab.encode(its)
+                h_types[row, length - len(evs) :] = [TYPE_INDEX[e] for e in evs]
+        return h_items, h_types
+
+    @torch.no_grad()
+    def user_embeddings(
+        self, items: Sequence[Sequence[int]], events: Sequence[Sequence[str]]
+    ) -> np.ndarray:
+        """User-tower vectors for arbitrary histories (e.g. read from the online store)."""
+        assert self.net is not None
+        self.net.eval()
+        device = torch.device(self.config.device)
+        h_items, h_types = self.encode_histories(items, events)
+        vecs = self.net.user_vectors(
+            torch.from_numpy(h_items).to(device), torch.from_numpy(h_types).to(device)
+        )
+        result: np.ndarray = vecs.cpu().numpy().astype(np.float32)
+        return result
+
+    def save(self, path: Path) -> None:
+        assert self.net is not None and self.vocab is not None
+        path.mkdir(parents=True, exist_ok=True)
+        torch.save(self.net.state_dict(), path / "state_dict.pt")
+        np.save(path / "item_ids.npy", self.vocab.ids)
+        (path / "config.json").write_text(json.dumps(self.config.to_dict(), indent=2))
+
+    @classmethod
+    def load(cls, path: Path) -> TwoTowerRecommender:
+        config = TwoTowerConfig(**json.loads((path / "config.json").read_text()))
+        model = cls(config)
+        model.vocab = ItemVocab(np.load(path / "item_ids.npy").tolist())
+        model.net = TwoTowerNet(len(model.vocab), config.dim, config.max_history)
+        model.net.load_state_dict(torch.load(path / "state_dict.pt", map_location=config.device))
+        model.net.to(torch.device(config.device))
+        return model
