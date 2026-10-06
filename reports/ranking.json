@@ -1,0 +1,118 @@
+{
+  "protocol": {
+    "requests_per_split": 8000,
+    "horizon_minutes": 30,
+    "ann_k": 500,
+    "test_requests": 8000,
+    "mean_relevant_per_request": 1.296375,
+    "git_sha": "05fb6f4"
+  },
+  "methods": {
+    "Popularity (14d)": {
+      "recall@10": 0.009736755952380953,
+      "ndcg@10": 0.005203486428521662,
+      "recall@50": 0.020720165945165944,
+      "ndcg@50": 0.007666565223197772,
+      "mrr@50": 0.00466968705750996,
+      "new_recall@10": 0.007411434519162857,
+      "new_ndcg@10": 0.0034645781687134215,
+      "new_recall@50": 0.015844516312900386,
+      "new_ndcg@50": 0.005406801109738138,
+      "new_mrr@50": 0.0029985635028323674
+    },
+    "Recently viewed + popularity": {
+      "recall@10": 0.3922745858308358,
+      "ndcg@10": 0.3796073753859293,
+      "recall@50": 0.39883807789432785,
+      "ndcg@50": 0.38124119732780976,
+      "mrr@50": 0.399814652977101,
+      "new_recall@10": 0.007411434519162857,
+      "new_ndcg@10": 0.0034645781687134215,
+      "new_recall@50": 0.015844516312900386,
+      "new_ndcg@50": 0.005406801109738138,
+      "new_mrr@50": 0.0029985635028323674
+    },
+    "Two-tower, exact": {
+      "recall@10": 0.43856919261294264,
+      "ndcg@10": 0.373781636195012,
+      "recall@50": 0.5190794439067876,
+      "ndcg@50": 0.39360393077206135,
+      "mrr@50": 0.3772610564394864,
+      "new_recall@10": 0.19225489251835856,
+      "new_ndcg@10": 0.11965032521589399,
+      "new_recall@50": 0.3009145688046449,
+      "new_ndcg@50": 0.14564895558279636,
+      "new_mrr@50": 0.10936722336339941
+    },
+    "Two-tower, FAISS HNSW": {
+      "recall@10": 0.43856919261294264,
+      "ndcg@10": 0.373781636195012,
+      "recall@50": 0.5190794439067876,
+      "ndcg@50": 0.3936040614350226,
+      "mrr@50": 0.3772611195707995,
+      "new_recall@10": 0.19225489251835856,
+      "new_ndcg@10": 0.11965032521589399,
+      "new_recall@50": 0.3009145688046449,
+      "new_ndcg@50": 0.14564895558279636,
+      "new_mrr@50": 0.10936722336339941
+    },
+    "**Two-tower + recent \u2192 LightGBM**": {
+      "recall@10": 0.4949440209096459,
+      "ndcg@10": 0.43305860480475733,
+      "recall@50": 0.5677383756000943,
+      "ndcg@50": 0.4509429656528634,
+      "mrr@50": 0.43690373880115124,
+      "new_recall@10": 0.19272783877584818,
+      "new_ndcg@10": 0.12289041181194502,
+      "new_recall@50": 0.3040437635322003,
+      "new_ndcg@50": 0.14955187989285904,
+      "new_mrr@50": 0.1136609339110947
+    }
+  },
+  "candidate_recall": 0.6422492762445888,
+  "candidates_per_request": 500.432875,
+  "ann": {
+    "ann_recall@500_vs_exact": 0.9952349999999999,
+    "ann_recall@50_vs_exact": 0.9999000000000001,
+    "hnsw_build_seconds": 15.492893708054908
+  },
+  "latency_ms": {
+    "user_tower_p50_ms": 0.1674999948590994,
+    "user_tower_p99_ms": 0.24049132363870768,
+    "ann_search_p50_ms": 2.206021046731621,
+    "ann_search_p99_ms": 3.050083740381524,
+    "ranker_predict_p50_ms": 0.9124370408244431,
+    "ranker_predict_p99_ms": 1.2998275412246585
+  },
+  "ranker": {
+    "best_iteration": 12.0,
+    "valid_ndcg@10": 0.707502883380086,
+    "valid_ndcg@50": 0.7344463977535042,
+    "train_requests": 4337.0,
+    "valid_requests": 1039.0
+  },
+  "feature_importance_gain": {
+    "ann_rank": 0.7774,
+    "ann_score": 0.113,
+    "ui_last_pos": 0.0472,
+    "recent_rank": 0.0253,
+    "item_views_24h": 0.0106,
+    "last_event_age_ms": 0.0098,
+    "ui_age_ms": 0.0085,
+    "session_distinct_items": 0.002,
+    "session_duration_ms": 0.0015,
+    "user_events_1h": 0.001,
+    "item_views_1h": 0.0009,
+    "item_carts_24h": 0.0007,
+    "user_events_5m": 0.0005,
+    "session_events": 0.0005,
+    "item_carts_1h": 0.0003,
+    "user_carts_1h": 0.0002,
+    "item_views_5m": 0.0002,
+    "item_purchases_24h": 0.0002,
+    "session_carts": 0.0001,
+    "ui_events": 0.0,
+    "ui_carts": 0.0,
+    "ui_is_last": 0.0
+  }
+}
