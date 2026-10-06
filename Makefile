@@ -6,6 +6,7 @@ SEEDS ?= 42 43 44
 WORKERS ?= 1
 SKEW_HOURS ?= 168
 REQUESTS ?= 8000
+API_WORKERS ?= 1
 
 .PHONY: help install up down logs data eda simulate stream backfill skew-check train rank test test-integration lint fmt typecheck check serve loadtest clean
 
@@ -72,8 +73,8 @@ typecheck:
 
 check: lint typecheck test  ## everything CI runs
 
-serve:  ## FastAPI recommendation service (Phase 4)
-	@echo "Not built yet: serving lands in Phase 4." && exit 1
+serve:  ## FastAPI recommendation service on :8000 (needs `make rank` artifacts + `make stream`)
+	$(RUN) uvicorn streamline.serving.app:app --host 0.0.0.0 --port 8000 --workers $(API_WORKERS) --log-level warning
 
 loadtest:  ## Locust load test (Phase 4)
 	@echo "Not built yet: load testing lands in Phase 4." && exit 1
