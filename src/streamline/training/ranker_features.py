@@ -26,7 +26,7 @@ def user_item_features(requests: pl.DataFrame) -> pl.DataFrame:
         requests.select("request_id", "as_of_ms", "hist_ts", "hist_items", "hist_events")
         .with_columns(n=pl.col("hist_items").list.len())
         .filter(pl.col("n") > 0)
-        .explode(["hist_ts", "hist_items", "hist_events"])
+        .explode(["hist_ts", "hist_items", "hist_events"], empty_as_null=False)
         .with_columns(pos=pl.int_range(pl.len()).over("request_id"))
         .with_columns(pos_from_end=pl.col("n") - 1 - pl.col("pos"))
     )
@@ -51,7 +51,7 @@ def build_features(
 
     items = item_features(events, pairs.select("item_id", "as_of_ms")).drop("item_id", "as_of_ms")
     users = user_features(events, req.select("user_id", "as_of_ms")).drop("user_id", "as_of_ms")
-    users = pl.concat([req.select("request_id"), users], how="horizontal")
+    users = req.select("request_id").hstack(users)
 
     return (
         pairs.hstack(items)
