@@ -86,6 +86,69 @@ services:
       timeout: 5s
       retries: 30
 
+  # --- serving stack: `make serve-up` (profile "serving") --------------------------
+  api:
+    profiles: ["serving"]
+    image: streamline-app:dev
+    build:
+      context: ..
+      dockerfile: infra/app/Dockerfile
+    command: ["uvicorn", "streamline.serving.app:app", "--host", "0.0.0.0", "--port", "8000",
+              "--workers", "${API_WORKERS:-4}", "--log-level", "warning"]
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      STREAMLINE_ARTIFACTS: /app/artifacts/serving
+    volumes:
+      - ../artifacts:/app/artifacts:ro
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+
+  prometheus:
+    profiles: ["serving"]
+    image: prom/prometheus:v3.6.0
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    depends_on:
+      - api
+
+  grafana:
+    profiles: ["serving"]
+    image: grafana/grafana:12.2.0
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/streamline.json
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+
+  # load generator on the same Docker network as the API: `make loadtest`
+  locust:
+    profiles: ["loadtest"]
+    image: streamline-app:dev
+    entrypoint: ["locust", "-f", "loadtest/locustfile.py"]
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      STREAMLINE_DATA_DIR: /app/data
+      STREAMLINE_REPORTS_DIR: /app/reports
+    volumes:
+      - ../data:/app/data:ro
+      - ../reports:/app/reports
+
 volumes:
   redpanda-data:
   postgres-data:
