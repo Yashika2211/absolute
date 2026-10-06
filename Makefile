@@ -13,6 +13,7 @@ help:  ## list targets
 
 install:  ## install python deps and git hooks
 	uv sync
+	$(RUN) python scripts/fix_macos_openmp.py
 	$(RUN) pre-commit install
 
 up:  ## start Redpanda, Redis, Postgres, MLflow
