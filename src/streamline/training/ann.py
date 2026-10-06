@@ -28,7 +28,7 @@ class AnnConfig:
     kind: IndexKind = "hnsw"
     hnsw_m: int = 32
     ef_construction: int = 200
-    ef_search: int = 256
+    ef_search: int = 800  # must exceed the 500 candidates retrieved per request
 
 
 class AnnIndex:
