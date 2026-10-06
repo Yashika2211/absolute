@@ -18,6 +18,7 @@ import faiss
 import polars as pl
 import torch
 
+from streamline.features.definitions import ITEM_FEATURES
 from streamline.features.online import OnlineStore
 from streamline.training.ann import AnnIndex
 from streamline.training.candidates import Retriever
@@ -65,6 +66,8 @@ class ServingRecommender:
         self.retriever = retriever
         self.ranker = ranker
         self.popular = popular
+        # only fetch the per-candidate item features the deployed ranker uses
+        self.item_feature_names = [f for f in ITEM_FEATURES if f in ranker.features]
 
     @classmethod
     def from_artifacts(cls, path: Path, store: OnlineStore) -> ServingRecommender:
@@ -92,7 +95,9 @@ class ServingRecommender:
         cands = self.retriever.candidates([0], [items], [events])
         timer.lap("retrieval")
 
-        item_rows = self.store.item_features(cands["item_id"].to_list(), as_of_ms)
+        item_rows = self.store.item_features(
+            cands["item_id"].to_list(), as_of_ms, self.item_feature_names
+        )
         timer.lap("redis_items")
 
         request = pl.DataFrame(
@@ -111,7 +116,9 @@ class ServingRecommender:
                 pl.lit(user_id, pl.Int64).alias("user_id"),
                 pl.lit(as_of_ms, pl.Int64).alias("as_of_ms"),
             )
-            .hstack(pl.DataFrame(item_rows))
+            .hstack(
+                pl.DataFrame(item_rows, schema=dict.fromkeys(self.item_feature_names, pl.Int64))
+            )
             .with_columns(pl.lit(v, pl.Int64).alias(k) for k, v in user_feats.items())
             .join(
                 user_item_features(request),
