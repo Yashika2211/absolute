@@ -16,6 +16,9 @@ dependencies = [
     "redis>=8.1.0",
     "faiss-cpu>=1.15.1",
     "lightgbm>=4.7.0",
+    "fastapi>=0.142.2",
+    "uvicorn[standard]>=0.54.0",
+    "prometheus-client>=0.26.0",
 ]
 
 [dependency-groups]
@@ -27,6 +30,8 @@ dev = [
     "pre-commit>=3.7",
     "kaggle>=1.6",
     "fakeredis[lua]>=2.38.0",
+    "locust>=2.46.7",
+    "httpx2>=2.13.1",
 ]
 
 [build-system]
