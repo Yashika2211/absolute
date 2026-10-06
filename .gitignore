@@ -27,3 +27,6 @@ kaggle.json
 .DS_Store
 .idea/
 .vscode/
+
+# Raw load-test output (summaries in reports/loadtest.{json,md} are committed)
+reports/loadtest/
