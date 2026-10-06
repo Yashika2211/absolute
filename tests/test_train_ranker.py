@@ -25,3 +25,14 @@ def test_results_table() -> None:
     }
     table = results_table({"A": m})
     assert table.splitlines()[2] == "| A | 0.5000 | 0.2500 | 0.2000 | 0.1000 | 0.0500 |"
+
+
+def test_pruned_features_only_drops_cheap_to_skip_item_windows() -> None:
+    from streamline.features.definitions import ITEM_FEATURES
+    from streamline.training.ranker_features import FEATURES
+    from streamline.training.train_ranker import pruned_features
+
+    importance = dict.fromkeys(FEATURES, 0.0) | {"item_views_24h": 0.01}
+    kept = pruned_features(importance)
+    assert [f for f in kept if f in ITEM_FEATURES] == ["item_views_24h"]
+    assert set(FEATURES) - set(kept) == set(ITEM_FEATURES) - {"item_views_24h"}
