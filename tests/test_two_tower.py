@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import numpy as np
 import pytest
 import torch
@@ -109,3 +111,22 @@ def test_unknown_user_gets_recommendations() -> None:
 def test_recommend_before_fit_fails() -> None:
     with pytest.raises(AssertionError):
         TwoTowerRecommender().recommend([1], k=1)
+
+
+def test_user_embeddings_match_recommend_and_survive_save(tmp_path: Path) -> None:
+    model = TwoTowerRecommender(TwoTowerConfig(dim=8, batch_size=2, epochs=2, min_item_count=1))
+    model.fit(EVENTS)
+    user1 = EVENTS.filter(EVENTS["user_id"] == 1).sort("ts_ms")
+    vec = model.user_embeddings([user1["item_id"].to_list()], [user1["event"].cast(str).to_list()])
+    ids, items = model.item_embeddings()
+    top = ids[np.argsort(-(vec @ items.T)[0], kind="stable")[:3]].tolist()
+    assert top == model.recommend([1], k=3)[0]
+
+    model.save(tmp_path / "tt")
+    loaded = TwoTowerRecommender.load(tmp_path / "tt")
+    np.testing.assert_allclose(loaded.item_embeddings()[1], items, rtol=1e-6)
+    np.testing.assert_allclose(
+        loaded.user_embeddings([user1["item_id"].to_list()], [user1["event"].cast(str).to_list()]),
+        vec,
+        rtol=1e-6,
+    )
